@@ -125,13 +125,13 @@ const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 
 const SCENE_GROUP_OFFSET = new THREE.Vector3(0, -6, 0); 
 
-const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FORMED', isPointing: boolean, pointPos: { x: number, y: number }}) => {
+const PhotoOrnaments = ({ state, isPointing, pointPos, lockedPhotoIndex, handlePhotoLock }: { state: 'CHAOS' | 'FORMED', isPointing: boolean, pointPos: { x: number, y: number }, lockedPhotoIndex: number, handlePhotoLock: (index: number) => void }) => {
   const textures = useTexture(CONFIG.photos.body);
   const count = CONFIG.counts.ornaments;
   const groupRef = useRef<THREE.Group>(null);
 
-  const borderGeometry = useMemo(() => new THREE.PlaneGeometry(1.2, 1.5), []);
-  const photoGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+  // 基础几何体：1x1 的平面，方便后续拉伸
+  const baseGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
 
   const tempV = useMemo(() => new THREE.Vector3(), []);
   const cameraDir = useMemo(() => new THREE.Vector3(), []);
@@ -141,8 +141,6 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
   const lockedIndexRef = useRef<number>(-1);
 
   const data = useMemo(() => {
-    // 数据生成逻辑保持不变，为了节省空间省略具体内容
-    // ... 请保持您原有的 data useMemo 内容 ...
     return new Array(count).fill(0).map((_, i) => {
       const chaosPos = new THREE.Vector3((Math.random()-0.5)*80, (Math.random()-0.5)*60, (Math.random()-0.5)*80);
       const h = CONFIG.tree.height; const y = (Math.random() * h) - (h / 2);
@@ -152,7 +150,7 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
 
       const isBig = Math.random() < 0.2;
-      const baseScale = isBig ? 2.2 : 0.8 + Math.random() * 0.6;
+      const baseScale = isBig ? 2.5 : 1.0 + Math.random() * 0.6;
       const weight = 0.8 + Math.random() * 1.2;
       const borderColor = CONFIG.colors.borders[Math.floor(Math.random() * CONFIG.colors.borders.length)];
       const rotationSpeed = { x: (Math.random()-0.5), y: (Math.random()-0.5), z: (Math.random()-0.5) };
@@ -162,18 +160,17 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
         chaosPos, targetPos, scale: baseScale, weight,
         textureIndex: i % textures.length, borderColor,
         currentPos: chaosPos.clone(), chaosRotation, rotationSpeed,
-        wobbleOffset: Math.random() * 10, wobbleSpeed: 0.5 + Math.random() * 0.5
+        wobbleOffset: Math.random() * 10, wobbleSpeed: 0.5 + Math.random() * 0.5,
+        // 注意：这里不再计算 aspect，因为 textures 加载可能滞后
       };
     });
   }, [textures, count]);
 
   useFrame((stateObj, delta) => {
     if (!groupRef.current) return;
-    //const { camera, clock } = stateObj;
     const { camera } = stateObj;
     const isFormed = state === 'FORMED';
     
-    // 目标坐标计算 (镜像 X)
     targetNDC.x = 1 - (pointPos.x * 2);
     targetNDC.y = 1 - (pointPos.y * 2);
 
@@ -182,35 +179,34 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
     let minDistSq = 0.5 * 0.5; 
 
     if (!isFormed) {
-      // 【核心优化 2：严格锁定逻辑】
-      // 如果正在指，且已经有一个被锁定的 ID，直接使用它。
-      // 跳过后续所有搜索逻辑 (forEach)，确保照片一旦被选中，移动手指也不会切换。
-      if (isPointing && lockedIndexRef.current !== -1) {
-         bestIdx = lockedIndexRef.current;
-      } else {
-         // 只有未锁定 (刚开始指) 时，才进行搜索
-         data.forEach((obj, i) => {
-            tempV.copy(obj.currentPos);
-            tempV.project(camera); 
-            
-            const dx = tempV.x - targetNDC.x;
-            const dy = tempV.y - targetNDC.y;
-            const distSq = dx * dx + dy * dy; 
-            
-            if (distSq < minDistSq && tempV.z < 1 && tempV.z > 0) {
-               minDistSq = distSq;
-               bestIdx = i;
+        if (isPointing) {
+            // 手势优先：只检查手势锁定
+            if (lockedIndexRef.current !== -1) {
+                bestIdx = lockedIndexRef.current;
+            } else {
+                data.forEach((obj, i) => {
+                    tempV.copy(obj.currentPos);
+                    tempV.project(camera); 
+                    
+                    const dx = tempV.x - targetNDC.x;
+                    const dy = tempV.y - targetNDC.y;
+                    const distSq = dx * dx + dy * dy; 
+                    
+                    if (distSq < minDistSq && tempV.z < 1 && tempV.z > 0) {
+                        minDistSq = distSq;
+                        bestIdx = i;
+                    }
+                });
+                if (bestIdx !== -1) {
+                    lockedIndexRef.current = bestIdx;
+                }
             }
-         });
-         
-         // 如果找到了目标且正在指，立即写入 ref 进行锁定
-         if (isPointing && bestIdx !== -1) {
-             lockedIndexRef.current = bestIdx;
-         }
-      }
+        } else {
+            // 手势未激活：使用鼠标锁定
+            bestIdx = lockedPhotoIndex;
+        }
     }
 
-    // 只有手指松开时，才清除锁定
     if (!isPointing) {
         lockedIndexRef.current = -1;
     }
@@ -218,7 +214,8 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
     // --- 2. 动画更新 ---
     groupRef.current.children.forEach((group, i) => {
       const objData = data[i];
-      const isSelected = (i === bestIdx && isPointing);
+      // 只有当 (是最佳目标) 且 (正在指 OR 有鼠标锁) 时才选中
+      const isSelected = (i === bestIdx && (isPointing || lockedPhotoIndex !== -1)); 
 
       let target;
       let moveSpeed = delta * (isFormed ? 1.0 * objData.weight : 1.5);
@@ -226,12 +223,10 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
       if (isFormed) {
         target = objData.targetPos;
       } else if (isSelected) {
-        // === 选中状态 ===
         camera.getWorldDirection(cameraDir);
         heroTargetPos.copy(camera.position).add(cameraDir.multiplyScalar(12));
         tempV.copy(heroTargetPos).sub(SCENE_GROUP_OFFSET);
         target = tempV; 
-
         moveSpeed = delta * 8.0; 
       } else {
         target = objData.chaosPos;
@@ -243,6 +238,7 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
       const targetScale = isSelected ? objData.scale * 2.0 : objData.scale;
       const currentScale = group.scale.x;
       const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, delta * 5);
+      // 应用整体缩放
       group.scale.set(nextScale, nextScale, nextScale);
 
       if (isFormed) {
@@ -255,33 +251,62 @@ const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FOR
       } else {
          group.rotation.x += delta * objData.rotationSpeed.x;
          group.rotation.y += delta * objData.rotationSpeed.y;
+         group.rotation.z += delta * objData.rotationSpeed.z;
       }
     });
   });
 
   return (
     <group ref={groupRef}>
-      {/* 渲染部分保持不变 */}
-      {data.map((obj, i) => (
-        <group key={i}>
-           <group position={[0, 0, 0.015]}>
-            <mesh geometry={photoGeometry}>
-              <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
-            </mesh>
-            <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
-              <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
-            </mesh>
+      {data.map((obj, i) => {
+        // 【核心修复】：在渲染时实时获取纹理并计算比例
+        const tex = textures[obj.textureIndex];
+        
+        // 如果图片加载完成（有宽度），计算比例；否则默认为 1（正方形）
+        // 这样即使第一帧没加载好，下一帧更新时比例会自动修正，而不会卡在 NaN 或 0
+        const rawAspect = (tex.image && tex.image.width && tex.image.height) 
+                          ? tex.image.width / tex.image.height 
+                          : 1;
+        
+        // 限制极端比例
+        const aspect = Math.max(0.5, Math.min(2.0, rawAspect));
+
+        const photoWidth = aspect;
+        const photoHeight = 1;
+        const borderWidth = photoWidth + 0.2;
+        const borderHeight = photoHeight + 0.4;
+        const borderYOffset = -0.1; 
+
+        return (
+          <group 
+             key={i}
+             onClick={(e) => {
+                 e.stopPropagation(); 
+                 handlePhotoLock(i); 
+             }}
+          >
+             {/* 正面 */}
+             <group position={[0, 0, 0.015]}>
+              <mesh geometry={baseGeometry} scale={[photoWidth, photoHeight, 1]}>
+                <meshStandardMaterial map={tex} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={tex} emissiveIntensity={1.0} side={THREE.FrontSide} />
+              </mesh>
+              <mesh geometry={baseGeometry} scale={[borderWidth, borderHeight, 1]} position={[0, borderYOffset, -0.01]}>
+                <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
+              </mesh>
+            </group>
+
+            {/* 背面 */}
+            <group position={[0, 0, -0.015]} rotation={[0, Math.PI, 0]}>
+              <mesh geometry={baseGeometry} scale={[photoWidth, photoHeight, 1]}>
+                <meshStandardMaterial map={tex} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={tex} emissiveIntensity={1.0} side={THREE.FrontSide} />
+              </mesh>
+              <mesh geometry={baseGeometry} scale={[borderWidth, borderHeight, 1]} position={[0, borderYOffset, -0.01]}>
+                <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
+              </mesh>
+            </group>
           </group>
-          <group position={[0, 0, -0.015]} rotation={[0, Math.PI, 0]}>
-            <mesh geometry={photoGeometry}>
-              <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
-            </mesh>
-            <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
-              <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
-            </mesh>
-          </group>
-        </group>
-      ))}
+        );
+      })}
     </group>
   );
 };
@@ -549,14 +574,14 @@ const GestureController = ({ onGesture, onMove, onPointing, onStatus, onPointPos
               
               // 移动控制逻辑保持不变
               //const speed = (0.5 - results.landmarks[0][0].x) * 0.15;
-              const speed = (0.5 - results.landmarks[0][0].x) * 0.35;
+              const speed = (0.5 - results.landmarks[0][0].x) * 0.45;
               onMove(Math.abs(speed) > 0.01 ? speed : 0);
               
             } else {
               // 没有手时，取消所有状态，并默认为屏幕中心
               onMove(0);
               onPointing(false); 
-              onPointPosition({x: 0.5, y: 0.5}); // 【核心修改 B：新增】
+              onPointPosition({x: 0.5, y: 0.5}); 
             }
         }
         requestRef = requestAnimationFrame(predictWebcam);
