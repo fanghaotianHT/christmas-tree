@@ -125,6 +125,167 @@ const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 
 const SCENE_GROUP_OFFSET = new THREE.Vector3(0, -6, 0); 
 
+// const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FORMED', isPointing: boolean, pointPos: { x: number, y: number }}) => {
+//   const textures = useTexture(CONFIG.photos.body);
+//   const count = CONFIG.counts.ornaments;
+//   const groupRef = useRef<THREE.Group>(null);
+
+//   const borderGeometry = useMemo(() => new THREE.PlaneGeometry(1.2, 1.5), []);
+//   const photoGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+
+//   const tempV = useMemo(() => new THREE.Vector3(), []);
+//   const cameraDir = useMemo(() => new THREE.Vector3(), []);
+//   const heroTargetPos = useMemo(() => new THREE.Vector3(), []);
+//   const targetNDC = useMemo(() => new THREE.Vector2(), []);
+  
+//   const lockedIndexRef = useRef<number>(-1);
+
+//   const data = useMemo(() => {
+//     // 数据生成逻辑保持不变，为了节省空间省略具体内容
+//     // ... 请保持您原有的 data useMemo 内容 ...
+//     return new Array(count).fill(0).map((_, i) => {
+//       const chaosPos = new THREE.Vector3((Math.random()-0.5)*80, (Math.random()-0.5)*60, (Math.random()-0.5)*80);
+//       const h = CONFIG.tree.height; const y = (Math.random() * h) - (h / 2);
+//       const rBase = CONFIG.tree.radius;
+//       const currentRadius = (rBase * (1 - (y + (h/2)) / h)) + 0.5;
+//       const theta = Math.random() * Math.PI * 2;
+//       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
+
+//       const isBig = Math.random() < 0.2;
+//       const baseScale = isBig ? 2.2 : 0.8 + Math.random() * 0.6;
+//       const weight = 0.8 + Math.random() * 1.2;
+//       const borderColor = CONFIG.colors.borders[Math.floor(Math.random() * CONFIG.colors.borders.length)];
+//       const rotationSpeed = { x: (Math.random()-0.5), y: (Math.random()-0.5), z: (Math.random()-0.5) };
+//       const chaosRotation = new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
+
+//       return {
+//         chaosPos, targetPos, scale: baseScale, weight,
+//         textureIndex: i % textures.length, borderColor,
+//         currentPos: chaosPos.clone(), chaosRotation, rotationSpeed,
+//         wobbleOffset: Math.random() * 10, wobbleSpeed: 0.5 + Math.random() * 0.5
+//       };
+//     });
+//   }, [textures, count]);
+
+//   useFrame((stateObj, delta) => {
+//     if (!groupRef.current) return;
+//     //const { camera, clock } = stateObj;
+//     const { camera } = stateObj;
+//     const isFormed = state === 'FORMED';
+    
+//     // 目标坐标计算 (镜像 X)
+//     targetNDC.x = 1 - (pointPos.x * 2);
+//     targetNDC.y = 1 - (pointPos.y * 2);
+
+//     // --- 1. 寻找或维持锁定 ---
+//     let bestIdx = -1;
+//     let minDistSq = 0.5 * 0.5; 
+
+//     if (!isFormed) {
+//       // 【核心优化 2：严格锁定逻辑】
+//       // 如果正在指，且已经有一个被锁定的 ID，直接使用它。
+//       // 跳过后续所有搜索逻辑 (forEach)，确保照片一旦被选中，移动手指也不会切换。
+//       if (isPointing && lockedIndexRef.current !== -1) {
+//          bestIdx = lockedIndexRef.current;
+//       } else {
+//          // 只有未锁定 (刚开始指) 时，才进行搜索
+//          data.forEach((obj, i) => {
+//             tempV.copy(obj.currentPos);
+//             tempV.project(camera); 
+            
+//             const dx = tempV.x - targetNDC.x;
+//             const dy = tempV.y - targetNDC.y;
+//             const distSq = dx * dx + dy * dy; 
+            
+//             if (distSq < minDistSq && tempV.z < 1 && tempV.z > 0) {
+//                minDistSq = distSq;
+//                bestIdx = i;
+//             }
+//          });
+         
+//          // 如果找到了目标且正在指，立即写入 ref 进行锁定
+//          if (isPointing && bestIdx !== -1) {
+//              lockedIndexRef.current = bestIdx;
+//          }
+//       }
+//     }
+
+//     // 只有手指松开时，才清除锁定
+//     if (!isPointing) {
+//         lockedIndexRef.current = -1;
+//     }
+
+//     // --- 2. 动画更新 ---
+//     groupRef.current.children.forEach((group, i) => {
+//       const objData = data[i];
+//       const isSelected = (i === bestIdx && isPointing);
+
+//       let target;
+//       let moveSpeed = delta * (isFormed ? 1.0 * objData.weight : 1.5);
+
+//       if (isFormed) {
+//         target = objData.targetPos;
+//       } else if (isSelected) {
+//         // === 选中状态 ===
+//         camera.getWorldDirection(cameraDir);
+//         heroTargetPos.copy(camera.position).add(cameraDir.multiplyScalar(12));
+//         tempV.copy(heroTargetPos).sub(SCENE_GROUP_OFFSET);
+//         target = tempV; 
+
+//         moveSpeed = delta * 8.0; 
+//       } else {
+//         target = objData.chaosPos;
+//       }
+
+//       objData.currentPos.lerp(target, moveSpeed);
+//       group.position.copy(objData.currentPos);
+
+//       const targetScale = isSelected ? objData.scale * 2.0 : objData.scale;
+//       const currentScale = group.scale.x;
+//       const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, delta * 5);
+//       group.scale.set(nextScale, nextScale, nextScale);
+
+//       if (isFormed) {
+//          group.lookAt(new THREE.Vector3(group.position.x * 2, group.position.y, group.position.z * 2));
+//       } else if (isSelected) {
+//          const qStart = group.quaternion.clone();
+//          group.lookAt(camera.position);
+//          const qEnd = group.quaternion.clone();
+//          group.quaternion.copy(qStart).slerp(qEnd, delta * 10);
+//       } else {
+//          group.rotation.x += delta * objData.rotationSpeed.x;
+//          group.rotation.y += delta * objData.rotationSpeed.y;
+//       }
+//     });
+//   });
+
+//   return (
+//     <group ref={groupRef}>
+//       {/* 渲染部分保持不变 */}
+//       {data.map((obj, i) => (
+//         <group key={i}>
+//            <group position={[0, 0, 0.015]}>
+//             <mesh geometry={photoGeometry}>
+//               <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
+//             </mesh>
+//             <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
+//               <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
+//             </mesh>
+//           </group>
+//           <group position={[0, 0, -0.015]} rotation={[0, Math.PI, 0]}>
+//             <mesh geometry={photoGeometry}>
+//               <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
+//             </mesh>
+//             <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
+//               <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
+//             </mesh>
+//           </group>
+//         </group>
+//       ))}
+//     </group>
+//   );
+// };
+
 const PhotoOrnaments = ({ state, isPointing, pointPos, lockedPhotoIndex, handlePhotoLock }: { state: 'CHAOS' | 'FORMED', isPointing: boolean, pointPos: { x: number, y: number }, lockedPhotoIndex: number, handlePhotoLock: (index: number) => void }) => {
   const textures = useTexture(CONFIG.photos.body);
   const count = CONFIG.counts.ornaments;
@@ -458,8 +619,67 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 };
 
 // --- Main Scene Experience ---
-//const Experience = ({ sceneState, rotationSpeed}: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number }) => {
-const Experience = ({ sceneState, rotationSpeed, isPointing, pointPos}: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number, isPointing: boolean, pointPos: { x: number, y: number } }) => {
+// const Experience = ({ sceneState, rotationSpeed, isPointing, pointPos}: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number, isPointing: boolean, pointPos: { x: number, y: number } }) => {
+//   const controlsRef = useRef<any>(null);
+//   useFrame(() => {
+//     if (controlsRef.current) {
+//       controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
+//       controlsRef.current.update();
+//     }
+//   });
+
+//   return (
+//     <>
+//       <PerspectiveCamera makeDefault position={[0, 8, 60]} fov={45} />
+//       <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={30} maxDistance={120} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
+
+//       <color attach="background" args={['#000300']} />
+//       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+//       <Environment preset="night" background={false} />
+
+//       <ambientLight intensity={0.4} color="#003311" />
+//       <pointLight position={[30, 30, 30]} intensity={100} color={CONFIG.colors.warmLight} />
+//       <pointLight position={[-30, 10, -30]} intensity={50} color={CONFIG.colors.gold} />
+//       <pointLight position={[0, -20, 10]} intensity={30} color="#ffffff" />
+
+//       <group position={[0, -6, 0]}>
+//         <Foliage state={sceneState} />
+//         <Suspense fallback={null}>
+//            {/* 将 isPointing 传入 PhotoOrnaments */}
+//            <PhotoOrnaments state={sceneState} isPointing={isPointing} pointPos={pointPos} />
+//            <ChristmasElements state={sceneState} />
+//            <FairyLights state={sceneState} />
+//            <TopStar state={sceneState} />
+//         </Suspense>
+//         <Sparkles count={600} scale={50} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
+//       </group>
+
+//       <EffectComposer>
+//         <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.5} radius={0.5} mipmapBlur />
+//         <Vignette eskil={false} offset={0.1} darkness={1.2} />
+//       </EffectComposer>
+//     </>
+//   );
+// };
+
+// --- Main Scene Experience ---
+const Experience = ({ 
+  sceneState, 
+  rotationSpeed, 
+  isPointing, 
+  pointPos, 
+  // 1. 在这里接收新的 Props
+  lockedPhotoIndex, 
+  handlePhotoLock 
+}: { 
+  sceneState: 'CHAOS' | 'FORMED', 
+  rotationSpeed: number, 
+  isPointing: boolean, 
+  pointPos: { x: number, y: number },
+  // 2. 定义类型
+  lockedPhotoIndex: number,
+  handlePhotoLock: (index: number) => void
+}) => {
   const controlsRef = useRef<any>(null);
   useFrame(() => {
     if (controlsRef.current) {
@@ -485,11 +705,17 @@ const Experience = ({ sceneState, rotationSpeed, isPointing, pointPos}: { sceneS
       <group position={[0, -6, 0]}>
         <Foliage state={sceneState} />
         <Suspense fallback={null}>
-           {/* 将 isPointing 传入 PhotoOrnaments */}
-           <PhotoOrnaments state={sceneState} isPointing={isPointing} pointPos={pointPos} />
-           <ChristmasElements state={sceneState} />
-           <FairyLights state={sceneState} />
-           <TopStar state={sceneState} />
+            {/* 3. 在这里将 Props 传递给 PhotoOrnaments */}
+            <PhotoOrnaments 
+                state={sceneState} 
+                isPointing={isPointing} 
+                pointPos={pointPos} 
+                lockedPhotoIndex={lockedPhotoIndex} // <--- 修复点：传递 lockedPhotoIndex
+                handlePhotoLock={handlePhotoLock}   // <--- 修复点：传递 handlePhotoLock
+            />
+            <ChristmasElements state={sceneState} />
+            <FairyLights state={sceneState} />
+            <TopStar state={sceneState} />
         </Suspense>
         <Sparkles count={600} scale={50} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
       </group>
@@ -607,6 +833,16 @@ export default function GrandTreeApp() {
   const [debugMode, setDebugMode] = useState(false);
   const [isPointing, setIsPointing] = useState(false);
   const [pointPos, setPointPos] = useState({ x: 0.5, y: 0.5 });
+  const [lockedPhotoIndex, setLockedPhotoIndex] = useState<number>(-1);
+  const handlePhotoLock = (index: number) => {
+        if (lockedPhotoIndex === index) {
+            setLockedPhotoIndex(-1); // 解锁
+            // setSceneState('FORMED'); // 假设解锁后回到树形
+        } else {
+            setLockedPhotoIndex(index); // 锁定
+            setSceneState('CHAOS'); // 锁定后进入混沌/放大模式
+        }
+    };
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
@@ -614,7 +850,16 @@ export default function GrandTreeApp() {
       {/* 3D 场景层 */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas dpr={[1, 2]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
-           <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} isPointing={isPointing} pointPos={pointPos} />
+           {/* <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} isPointing={isPointing} pointPos={pointPos} /> */}
+           <Experience 
+            sceneState={sceneState} 
+            rotationSpeed={rotationSpeed} 
+            isPointing={isPointing} 
+            pointPos={pointPos}
+            //核心修复：添加这两个缺失的属性
+            lockedPhotoIndex={lockedPhotoIndex} 
+            handlePhotoLock={handlePhotoLock} 
+        />
         </Canvas>
       </div>
 
