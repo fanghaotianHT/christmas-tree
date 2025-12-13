@@ -125,167 +125,6 @@ const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 
 const SCENE_GROUP_OFFSET = new THREE.Vector3(0, -6, 0); 
 
-// const PhotoOrnaments = ({ state, isPointing, pointPos }: { state: 'CHAOS' | 'FORMED', isPointing: boolean, pointPos: { x: number, y: number }}) => {
-//   const textures = useTexture(CONFIG.photos.body);
-//   const count = CONFIG.counts.ornaments;
-//   const groupRef = useRef<THREE.Group>(null);
-
-//   const borderGeometry = useMemo(() => new THREE.PlaneGeometry(1.2, 1.5), []);
-//   const photoGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
-
-//   const tempV = useMemo(() => new THREE.Vector3(), []);
-//   const cameraDir = useMemo(() => new THREE.Vector3(), []);
-//   const heroTargetPos = useMemo(() => new THREE.Vector3(), []);
-//   const targetNDC = useMemo(() => new THREE.Vector2(), []);
-  
-//   const lockedIndexRef = useRef<number>(-1);
-
-//   const data = useMemo(() => {
-//     // 数据生成逻辑保持不变，为了节省空间省略具体内容
-//     // ... 请保持您原有的 data useMemo 内容 ...
-//     return new Array(count).fill(0).map((_, i) => {
-//       const chaosPos = new THREE.Vector3((Math.random()-0.5)*80, (Math.random()-0.5)*60, (Math.random()-0.5)*80);
-//       const h = CONFIG.tree.height; const y = (Math.random() * h) - (h / 2);
-//       const rBase = CONFIG.tree.radius;
-//       const currentRadius = (rBase * (1 - (y + (h/2)) / h)) + 0.5;
-//       const theta = Math.random() * Math.PI * 2;
-//       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
-
-//       const isBig = Math.random() < 0.2;
-//       const baseScale = isBig ? 2.2 : 0.8 + Math.random() * 0.6;
-//       const weight = 0.8 + Math.random() * 1.2;
-//       const borderColor = CONFIG.colors.borders[Math.floor(Math.random() * CONFIG.colors.borders.length)];
-//       const rotationSpeed = { x: (Math.random()-0.5), y: (Math.random()-0.5), z: (Math.random()-0.5) };
-//       const chaosRotation = new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-
-//       return {
-//         chaosPos, targetPos, scale: baseScale, weight,
-//         textureIndex: i % textures.length, borderColor,
-//         currentPos: chaosPos.clone(), chaosRotation, rotationSpeed,
-//         wobbleOffset: Math.random() * 10, wobbleSpeed: 0.5 + Math.random() * 0.5
-//       };
-//     });
-//   }, [textures, count]);
-
-//   useFrame((stateObj, delta) => {
-//     if (!groupRef.current) return;
-//     //const { camera, clock } = stateObj;
-//     const { camera } = stateObj;
-//     const isFormed = state === 'FORMED';
-    
-//     // 目标坐标计算 (镜像 X)
-//     targetNDC.x = 1 - (pointPos.x * 2);
-//     targetNDC.y = 1 - (pointPos.y * 2);
-
-//     // --- 1. 寻找或维持锁定 ---
-//     let bestIdx = -1;
-//     let minDistSq = 0.5 * 0.5; 
-
-//     if (!isFormed) {
-//       // 【核心优化 2：严格锁定逻辑】
-//       // 如果正在指，且已经有一个被锁定的 ID，直接使用它。
-//       // 跳过后续所有搜索逻辑 (forEach)，确保照片一旦被选中，移动手指也不会切换。
-//       if (isPointing && lockedIndexRef.current !== -1) {
-//          bestIdx = lockedIndexRef.current;
-//       } else {
-//          // 只有未锁定 (刚开始指) 时，才进行搜索
-//          data.forEach((obj, i) => {
-//             tempV.copy(obj.currentPos);
-//             tempV.project(camera); 
-            
-//             const dx = tempV.x - targetNDC.x;
-//             const dy = tempV.y - targetNDC.y;
-//             const distSq = dx * dx + dy * dy; 
-            
-//             if (distSq < minDistSq && tempV.z < 1 && tempV.z > 0) {
-//                minDistSq = distSq;
-//                bestIdx = i;
-//             }
-//          });
-         
-//          // 如果找到了目标且正在指，立即写入 ref 进行锁定
-//          if (isPointing && bestIdx !== -1) {
-//              lockedIndexRef.current = bestIdx;
-//          }
-//       }
-//     }
-
-//     // 只有手指松开时，才清除锁定
-//     if (!isPointing) {
-//         lockedIndexRef.current = -1;
-//     }
-
-//     // --- 2. 动画更新 ---
-//     groupRef.current.children.forEach((group, i) => {
-//       const objData = data[i];
-//       const isSelected = (i === bestIdx && isPointing);
-
-//       let target;
-//       let moveSpeed = delta * (isFormed ? 1.0 * objData.weight : 1.5);
-
-//       if (isFormed) {
-//         target = objData.targetPos;
-//       } else if (isSelected) {
-//         // === 选中状态 ===
-//         camera.getWorldDirection(cameraDir);
-//         heroTargetPos.copy(camera.position).add(cameraDir.multiplyScalar(12));
-//         tempV.copy(heroTargetPos).sub(SCENE_GROUP_OFFSET);
-//         target = tempV; 
-
-//         moveSpeed = delta * 8.0; 
-//       } else {
-//         target = objData.chaosPos;
-//       }
-
-//       objData.currentPos.lerp(target, moveSpeed);
-//       group.position.copy(objData.currentPos);
-
-//       const targetScale = isSelected ? objData.scale * 2.0 : objData.scale;
-//       const currentScale = group.scale.x;
-//       const nextScale = THREE.MathUtils.lerp(currentScale, targetScale, delta * 5);
-//       group.scale.set(nextScale, nextScale, nextScale);
-
-//       if (isFormed) {
-//          group.lookAt(new THREE.Vector3(group.position.x * 2, group.position.y, group.position.z * 2));
-//       } else if (isSelected) {
-//          const qStart = group.quaternion.clone();
-//          group.lookAt(camera.position);
-//          const qEnd = group.quaternion.clone();
-//          group.quaternion.copy(qStart).slerp(qEnd, delta * 10);
-//       } else {
-//          group.rotation.x += delta * objData.rotationSpeed.x;
-//          group.rotation.y += delta * objData.rotationSpeed.y;
-//       }
-//     });
-//   });
-
-//   return (
-//     <group ref={groupRef}>
-//       {/* 渲染部分保持不变 */}
-//       {data.map((obj, i) => (
-//         <group key={i}>
-//            <group position={[0, 0, 0.015]}>
-//             <mesh geometry={photoGeometry}>
-//               <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
-//             </mesh>
-//             <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
-//               <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
-//             </mesh>
-//           </group>
-//           <group position={[0, 0, -0.015]} rotation={[0, Math.PI, 0]}>
-//             <mesh geometry={photoGeometry}>
-//               <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
-//             </mesh>
-//             <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
-//               <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
-//             </mesh>
-//           </group>
-//         </group>
-//       ))}
-//     </group>
-//   );
-// };
-
 const PhotoOrnaments = ({ state, isPointing, pointPos, lockedPhotoIndex, handlePhotoLock }: { state: 'CHAOS' | 'FORMED', isPointing: boolean, pointPos: { x: number, y: number }, lockedPhotoIndex: number, handlePhotoLock: (index: number) => void }) => {
   const textures = useTexture(CONFIG.photos.body);
   const count = CONFIG.counts.ornaments;
@@ -618,49 +457,153 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Main Scene Experience ---
-// const Experience = ({ sceneState, rotationSpeed, isPointing, pointPos}: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number, isPointing: boolean, pointPos: { x: number, y: number } }) => {
-//   const controlsRef = useRef<any>(null);
-//   useFrame(() => {
-//     if (controlsRef.current) {
-//       controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
-//       controlsRef.current.update();
+// --- Component: Falling Snow ---
+// const Snow = () => {
+//   const count = 1500; // 雪花数量
+//   const geomRef = useRef<THREE.BufferGeometry>(null);
+  
+//   // 初始化雪花位置和速度
+//   const { positions, velocities } = useMemo(() => {
+//     const pos = new Float32Array(count * 3);
+//     const vels = new Float32Array(count); // 下落速度
+    
+//     for (let i = 0; i < count; i++) {
+//       // 随机分布在场景中 (范围 X:-50~50, Y:-40~60, Z:-50~50)
+//       pos[i * 3] = (Math.random() - 0.5) * 100;     // x
+//       pos[i * 3 + 1] = (Math.random() - 0.5) * 100; // y
+//       pos[i * 3 + 2] = (Math.random() - 0.5) * 100; // z
+      
+//       // 随机速度 2.0 到 5.0 之间
+//       vels[i] = 2.0 + Math.random() * 3.0; 
 //     }
+//     return { positions: pos, velocities: vels };
+//   }, []);
+
+//   useFrame((_, delta) => {
+//     if (!geomRef.current) return;
+    
+//     const posAttr = geomRef.current.attributes.position;
+//     // 直接操作 buffer array 性能最好
+//     const arr = posAttr.array as Float32Array; 
+
+//     for (let i = 0; i < count; i++) {
+//       // 更新 Y 轴 (下落)
+//       arr[i * 3 + 1] -= velocities[i] * delta;
+
+//       // 简单的横向飘动 (基于时间和自身索引，产生伪随机摆动)
+//       arr[i * 3] += Math.sin(_.clock.elapsedTime * 0.5 + i) * 0.02;
+
+//       // 如果落到底部 (比如 y < -40)，重置到顶部 (y = 50)
+//       if (arr[i * 3 + 1] < -40) {
+//         arr[i * 3 + 1] = 50;
+//         // 重新随机一下 X 和 Z，避免雪花成排出现
+//         arr[i * 3] = (Math.random() - 0.5) * 100;
+//         arr[i * 3 + 2] = (Math.random() - 0.5) * 100;
+//       }
+//     }
+//     posAttr.needsUpdate = true;
 //   });
 
 //   return (
-//     <>
-//       <PerspectiveCamera makeDefault position={[0, 8, 60]} fov={45} />
-//       <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={30} maxDistance={120} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
-
-//       <color attach="background" args={['#000300']} />
-//       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-//       <Environment preset="night" background={false} />
-
-//       <ambientLight intensity={0.4} color="#003311" />
-//       <pointLight position={[30, 30, 30]} intensity={100} color={CONFIG.colors.warmLight} />
-//       <pointLight position={[-30, 10, -30]} intensity={50} color={CONFIG.colors.gold} />
-//       <pointLight position={[0, -20, 10]} intensity={30} color="#ffffff" />
-
-//       <group position={[0, -6, 0]}>
-//         <Foliage state={sceneState} />
-//         <Suspense fallback={null}>
-//            {/* 将 isPointing 传入 PhotoOrnaments */}
-//            <PhotoOrnaments state={sceneState} isPointing={isPointing} pointPos={pointPos} />
-//            <ChristmasElements state={sceneState} />
-//            <FairyLights state={sceneState} />
-//            <TopStar state={sceneState} />
-//         </Suspense>
-//         <Sparkles count={600} scale={50} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
-//       </group>
-
-//       <EffectComposer>
-//         <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.5} radius={0.5} mipmapBlur />
-//         <Vignette eskil={false} offset={0.1} darkness={1.2} />
-//       </EffectComposer>
-//     </>
+//     <points>
+//       <bufferGeometry ref={geomRef}>
+//         <bufferAttribute 
+//           attach="attributes-position" 
+//           count={count} 
+//           array={positions} 
+//           itemSize={3} 
+//         />
+//       </bufferGeometry>
+//       <pointsMaterial 
+//         size={0.4} 
+//         color="#FFFFFF" 
+//         transparent 
+//         opacity={0.8} 
+//         depthWrite={false} 
+//       />
+//     </points>
 //   );
 // };
+
+// --- Component: Falling Snow (Canvas Texture Version) ---
+const Snow = () => {
+  const count = 1500;
+  const geomRef = useRef<THREE.BufferGeometry>(null);
+
+  // 1. 使用 useMemo 动态创建一个包含 "❄️" 图案的纹理
+  // 这样完全避免了 Base64 图片加载错误的问题
+  const snowTexture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.fillStyle = 'transparent';
+      context.fillRect(0, 0, 32, 32);
+      
+      // 在 Canvas 中心画一个白色的雪花文字
+      context.font = '24px Arial'; // 字体大小
+      context.fillStyle = 'white'; // 颜色
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillText('❄️', 16, 16); 
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }, []);
+
+  const { positions, velocities } = useMemo(() => {
+    const pos = new Float32Array(count * 3);
+    const vels = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * 100;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * 100;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * 100;
+      vels[i] = 2.0 + Math.random() * 3.0;
+    }
+    return { positions: pos, velocities: vels };
+  }, []);
+
+  useFrame((_, delta) => {
+    if (!geomRef.current) return;
+    const posAttr = geomRef.current.attributes.position;
+    const arr = posAttr.array as Float32Array; 
+    for (let i = 0; i < count; i++) {
+      // 下落逻辑
+      arr[i * 3 + 1] -= velocities[i] * delta;
+      // 飘动逻辑
+      arr[i * 3] += Math.sin(_.clock.elapsedTime * 0.5 + i) * 0.02;
+
+      // 触底重置
+      if (arr[i * 3 + 1] < -40) {
+        arr[i * 3 + 1] = 50;
+        arr[i * 3] = (Math.random() - 0.5) * 100;
+        arr[i * 3 + 2] = (Math.random() - 0.5) * 100;
+      }
+    }
+    posAttr.needsUpdate = true;
+  });
+
+  return (
+    <points>
+      <bufferGeometry ref={geomRef}>
+        <bufferAttribute attach="attributes-position" count={count} array={positions} itemSize={3} />
+      </bufferGeometry>
+      <pointsMaterial 
+        size={0.8}            // 雪花大小
+        map={snowTexture}     // 使用上面生成的 Canvas 纹理
+        color="#FFFFFF"
+        transparent
+        opacity={0.9}
+        depthWrite={false}
+        alphaTest={0.01}      // 过滤掉 Canvas 的透明背景
+        toneMapped={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+};
 
 // --- Main Scene Experience ---
 const Experience = ({ 
@@ -703,6 +646,7 @@ const Experience = ({
       <pointLight position={[0, -20, 10]} intensity={30} color="#ffffff" />
 
       <group position={[0, -6, 0]}>
+        <Snow />  {/* <--- New! 添加这一行 */}
         <Foliage state={sceneState} />
         <Suspense fallback={null}>
             {/* 3. 在这里将 Props 传递给 PhotoOrnaments */}
